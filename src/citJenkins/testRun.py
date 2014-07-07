@@ -18,18 +18,23 @@ class testRun():
         - and calling an external decision function to determine if execution should continue
     '''
 
-    def __init__(self):
+    def __init__(self, verbose = 0):
         self.testVariableRE = re.compile(r'\$\((\w+)\)')
+        self.verbose = verbose
 
     def run(self, commands, variables):
         ''' Run a sequence of commands, stopping on the first non-zero exit code. '''
         retcode = 1
+        modName = 'testRun.run'
 
         def replaceVariable(matchobj):
             ''' Replace a $(variable) with its value. '''
             variable = matchobj.group(1)
             if variable in variables.keys():
-                return variables[variable]
+                replacement = variables[variable]
+                if self.verbose > 1:
+                    print >>sys.stderr, '%s: replacing "$s" with "%s"' % (modName, variable, replacement)
+                return replacement
             else:
                 return matchobj.group(0)
 
@@ -37,9 +42,9 @@ class testRun():
             ''' Evaluate the retcode returned by command and return False if execution should stop. '''
             result = False
             if retcode < 0:
-                print >>sys.stderr, "\"%s\" terminated by signal %d" % (command, -retcode)
+                print >>sys.stderr, "%s: \"%s\" terminated by signal %d" % (modName, command, -retcode)
             elif retcode > 0:
-                print >>sys.stderr, "\"%s\" returned %d" % (command, retcode)
+                print >>sys.stderr, "%s: \"%s\" returned %d" % (modName, command, retcode)
             else:
                 result = True
             return result
@@ -65,7 +70,11 @@ class testRun():
             else:
                 expandedCommand = self.testVariableRE.sub(replaceVariable, baseCommand)
 
+            if self.verbose > 0:
+                print >>sys.stderr, '%s: "%s" ...' % (modName, expandedCommand)
             retcode = subprocess.call(expandedCommand, shell=True)
+            if self.verbose > 0:
+                print >>sys.stderr, '%s: ... returned %d' % (modName, retcode)
             if not testResult(expandedCommand, retcode):
                 break
         return retcode

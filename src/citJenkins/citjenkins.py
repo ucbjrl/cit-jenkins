@@ -52,11 +52,14 @@ class CLIError(Exception):
 localRepoNames = [ '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel',
                    '/Users/jrl/noArc/clients/ucb/git/ucb-bar/dreamer-tools']
 
+defaultChiselJar = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.10/2.3-SNAPSHOT/jars/chisel_2.10.jar'
+chiselJar = defaultChiselJar
+
 def seed_generator(size=8, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 def chisel_jar_path():
-    return '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.10/2.3-SNAPSHOT/jars/chisel_2.10.jar'
+    return chiselJar
 
 testDir = "test"
 
@@ -130,7 +133,8 @@ def cleanup(test, variables):
         ]
     test.run(cleanCommands, variables)
 
-def doWork(paths, period):
+def doWork(paths, period, verbose):
+    modName = __name__ + '.doWork'
     variables = updateVariables()
     homeDir = os.getcwd()
     
@@ -138,7 +142,7 @@ def doWork(paths, period):
     if repos is None:
         exit(1)
     
-    test = testRun()
+    test = testRun(verbose)
     locate(test, variables)
     
     result = 0
@@ -151,6 +155,10 @@ def doWork(paths, period):
     os.chdir(homeDir)
     if result == 0:
         cleanup(test, variables)
+    else:
+        # Print the variables for this failed test.
+        for k, v in variables.iteritems():
+            print >>sys.stderr, '%s: %s "%s"' % (modName, k, v)
 
 def main(argv=None): # IGNORE:C0111
     '''Command line options.'''
@@ -179,13 +187,15 @@ def main(argv=None): # IGNORE:C0111
 USAGE
 ''' % (program_shortdesc, str(__date__))
 
+    global chiselJar, defaultChiselJar
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license, formatter_class=RawDescriptionHelpFormatter)
         parser.add_argument("-p", "--period", dest="periodMinutes", help="interval to check for repo updates (in minutes) [default: %(default)s]", type=int, default=15)
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument(dest="paths", help="paths to folders containing clones of gihub repositories to be tested [default: %(default)s]",  default=localRepoNames, metavar="path", nargs='*')
+        parser.add_argument('-J', '--chiselJar', dest='chiselJar', help='path to chisel jar to use for testing [default: %(default)s]', default=defaultChiselJar)
+        parser.add_argument(dest="paths", help="paths to folders containing clones of github repositories to be tested [default: %(default)s]",  default=localRepoNames, metavar="path", nargs='*')
 
         # Process arguments
         args = parser.parse_args()
@@ -197,7 +207,7 @@ USAGE
             print("Verbose mode on")
 
         period = timedelta(minutes = args.periodMinutes)
-        doWork(paths, period)
+        doWork(paths, period, verbose)
         return 0
  
     except KeyboardInterrupt:
