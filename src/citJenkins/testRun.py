@@ -19,7 +19,7 @@ class testRun():
     '''
 
     def __init__(self):
-        self.testVariableRE = re.compile(r'$\((\w+)\)')
+        self.testVariableRE = re.compile(r'\$\((\w+)\)')
 
     def run(self, commands, variables):
         ''' Run a sequence of commands, stopping on the first non-zero exit code. '''
@@ -41,7 +41,7 @@ class testRun():
             elif retcode > 0:
                 print >>sys.stderr, "\"%s\" returned %d" % (command, retcode)
             else:
-                result - True
+                result = True
             return result
 
         for command in commands:

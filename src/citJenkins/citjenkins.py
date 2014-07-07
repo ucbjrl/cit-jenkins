@@ -84,7 +84,7 @@ sbtTestCommands = [
 ]
 
 testCommands = [
-    "chisel-torture --seed %seed",
+    "chisel-torture --seed $(seed)",
     "mv Torture.vcd Torture-gold.vcd",
     "scalac -classpath $(chisel_jar):. Torture.scala",
     "scala -classpath $(chisel_jar):. Torture --vcd --backend flo",
@@ -126,7 +126,7 @@ def cleanup(test, variables):
     '''
     cleanCommands = [
         "ls $(testDir)/DELETETHISDIRECTORYWHENDONE",
-        "rm -rf $(testDir)/*"
+        "rm -rf $(testDir)"
         ]
     test.run(cleanCommands, variables)
 
@@ -145,6 +145,7 @@ def doWork(paths, period):
     while result == 0:
         if repos.reposChangedSince():
             break
+        variables = updateVariables()
         result = runATest(test, variables)
     
     os.chdir(homeDir)

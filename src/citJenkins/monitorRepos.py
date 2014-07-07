@@ -100,7 +100,7 @@ class MonitoredRepo():
         self.connected = False
 
     def isChanged(self):
-        return 0 if self.pushedhead == self.localhead else 1
+        return 0 if self.pushedhead == self.localhead.hexsha else 1
 
 class MonitorRepos():
     ''' Maintain a connection to github hosted repositories, monitoring them for pushes.'''
