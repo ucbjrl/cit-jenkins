@@ -19,11 +19,12 @@ It defines classes_and_methods
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
-
+from argparse import FileType
 from datetime import timedelta
 import errno
 import os
 import random
+import signal
 import string
 import sys
 
@@ -54,22 +55,70 @@ localRepoNames = [ '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel',
 
 defaultChiselJar = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.10/2.3-SNAPSHOT/jars/chisel_2.10.jar'
 chiselJar = defaultChiselJar
+testDir = "test"
+doExit = False
+seed = None
+badSeedFile = None
+continueOnError = False
+
+homeDir = os.getcwd()
 
 def seed_generator(size=8, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
+    '''Return the "next" seed. None when done.'''
+    def newSeedFromFile(f):
+        global seed
+        newSeed = f.readline()
+        if newSeed == '':
+            newSeed = None
+            f.close()
+            seed = 'No more seeds!'
+        else:
+            # Trim trailing white space (including newlines)
+            newSeed = newSeed.rstrip()
+        return newSeed
+
+    # Do we have a global seed?
+    global seed
+    newSeed = None
+    if seed is None:
+        newSeed = ''.join(random.choice(chars) for _ in range(size))
+    elif type(seed) is str:
+        # Does seed look like a file path?
+        if seed.find('/') >= 0:
+            # It's a file spec. Try to open it for reading.
+            # Is it an absolute or a relative path?
+            path = ''
+            if seed.startswith('/'):
+                path = seed
+            else:
+                path = os.path.join(homeDir, seed)
+            f = open(path, 'r')
+            if f is None:
+                print 'Couldn\'t open %s for reading.' % (seed)
+            else:
+                seed = f
+                newSeed = newSeedFromFile(seed)
+        elif seed != 'No more seeds!':
+            newSeed = seed
+            seed = 'No more seeds!'
+    elif type(seed) is file:
+        newSeed = newSeedFromFile(seed)
+            
+    return newSeed
 
 def chisel_jar_path():
     return chiselJar
 
-testDir = "test"
-
 def testDir_path():
     return testDir
 
-testVariableFUNC = {
-    'seed' : seed_generator,
+initVariableFUNC = {
     'chisel_jar' : chisel_jar_path,
     'testDir' : testDir_path,
+}
+
+testVariableFUNC = {
+    'seed' : seed_generator,
 }
 
 setupCommands = [
@@ -97,11 +146,34 @@ testCommands = [
     "vcddiff Torture-gold.vcd Torture.vcd"
 ]
 
+def sigterm(signum, frame):
+    global doExit
+    print 'citjenkins: signal %d' % (signum)
+    if signum == signal.SIGTERM:
+        doExit = True
+
+def initVariables():
+    variables = {}
+    # Evaluate all variables so they stay constant for this set of commands.
+    for v, f in initVariableFUNC.iteritems():
+        newValue = f()
+        # If a function returns None, it's out of values.
+        # Pass this uplevel. We'll probably want to stop.
+        if newValue is None:
+            return None
+        variables[v] = newValue
+    return variables
+
 def updateVariables():
     variables = {}
     # Evaluate all variables so they stay constant for this set of commands.
     for v, f in testVariableFUNC.iteritems():
-        variables[v] = f()
+        newValue = f()
+        # If a function returns None, it's out of values.
+        # Pass this uplevel. We'll probably want to stop.
+        if newValue is None:
+            return None
+        variables[v] = newValue
     return variables
 
 def locate(test, variables):
@@ -135,8 +207,10 @@ def cleanup(test, variables):
 
 def doWork(paths, period, verbose):
     modName = __name__ + '.doWork'
-    variables = updateVariables()
-    homeDir = os.getcwd()
+    variables = initVariables()
+    if variables is None:
+        print 'no variables'
+        exit(1)
     
     repos = MonitorRepos(paths, period)
     if repos is None:
@@ -146,19 +220,30 @@ def doWork(paths, period, verbose):
     locate(test, variables)
     
     result = 0
-    while result == 0:
+    keepTestDirectory = False
+    while (result == 0 or continueOnError) and not doExit:
         if repos.reposChangedSince():
             break
-        variables = updateVariables()
+        newVariables = updateVariables()
+        if newVariables is None:
+            break
+        for k, v in newVariables.iteritems():
+            variables[k] = v
         result = runATest(test, variables)
+        if result != 0:
+            keepTestDirectory = True
+            # Print the variables for this failed test.
+            for k, v in variables.iteritems():
+                print >>sys.stderr, '%s: %s "%s"' % (modName, k, v)
+            if badSeedFile is not None:
+                badSeedFile.write(variables['seed'] + '\n')
     
+    if badSeedFile is not None:
+        badSeedFile.close()
+
     os.chdir(homeDir)
-    if result == 0:
+    if not keepTestDirectory:
         cleanup(test, variables)
-    else:
-        # Print the variables for this failed test.
-        for k, v in variables.iteritems():
-            print >>sys.stderr, '%s: %s "%s"' % (modName, k, v)
 
 def main(argv=None): # IGNORE:C0111
     '''Command line options.'''
@@ -188,13 +273,17 @@ USAGE
 ''' % (program_shortdesc, str(__date__))
 
     global chiselJar, defaultChiselJar
+    global continueOnError
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license, formatter_class=RawDescriptionHelpFormatter)
+        parser.add_argument("-c", "--continue", dest="continueOnError", help="continue on error [default: %(default)s]", action='store_true', default=continueOnError)
         parser.add_argument("-p", "--period", dest="periodMinutes", help="interval to check for repo updates (in minutes) [default: %(default)s]", type=int, default=15)
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument('-J', '--chiselJar', dest='chiselJar', help='path to chisel jar to use for testing [default: %(default)s]', default=defaultChiselJar)
+        parser.add_argument('-J', '--chiselJar', dest='chiselJar', help='path to chisel jar to use for testing [default: %(default)s]', type=str, default=defaultChiselJar)
+        parser.add_argument('-s', '--seed', dest='seed', help='seed (or file containing seeds', type=str, default=None)
+        parser.add_argument('-b', '--badseed', dest='badseed', help='file to contain list of bad seeds', type=FileType('w'), default=None)
         parser.add_argument(dest="paths", help="paths to folders containing clones of github repositories to be tested [default: %(default)s]",  default=localRepoNames, metavar="path", nargs='*')
 
         # Process arguments
@@ -202,10 +291,18 @@ USAGE
 
         paths = args.paths
         verbose = args.verbose
+        global badSeedFile
+        badSeedFile = args.badseed
+        continueOnError = args.continueOnError
+
+        global seed
+        seed = args.seed
 
         if verbose > 0:
             print("Verbose mode on")
 
+        # Install the signal handler to catch SIGTERM
+        signal.signal(signal.SIGTERM, sigterm)
         period = timedelta(minutes = args.periodMinutes)
         doWork(paths, period, verbose)
         return 0
