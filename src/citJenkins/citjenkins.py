@@ -79,9 +79,9 @@ setupCommands = [
 sbtTestCommands = [
     "chisel-torture --seed $(seed)",
     "mv Torture.vcd Torture-gold.vcd",
-    "sbt -Dsbt.log.noformat=true \"run --vcd --backend flo\"",
+    "sbt -Dsbt.log.noformat=true \"run --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend flo\"",
     "vcd2step Torture-gold.vcd Torture.flo test.in",
-    "sbt -Dsbt.log.noformat=true \"run --vcd --backend c --genHarness --compile\"",
+    "sbt -Dsbt.log.noformat=true \"run --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend c --genHarness --compile\"",
     "cat test.in | ./Torture",
     "vcddiff Torture-gold.vcd Torture.vcd"
 ]
@@ -90,9 +90,9 @@ testCommands = [
     "chisel-torture --seed $(seed)",
     "mv Torture.vcd Torture-gold.vcd",
     "scalac -classpath $(chisel_jar):. Torture.scala",
-    "scala -classpath $(chisel_jar):. Torture --vcd --backend flo",
+    "scala -classpath $(chisel_jar):. Torture  --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend flo",
     "vcd2step Torture-gold.vcd Torture.flo test.in",
-    "scala -classpath $(chisel_jar):. Torture --vcd --backend c --genHarness --compile",
+    "scala -classpath $(chisel_jar):. Torture  --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend c --genHarness --compile",
     "cat test.in | ./Torture",
     "vcddiff Torture-gold.vcd Torture.vcd"
 ]
@@ -238,4 +238,4 @@ if __name__ == "__main__":
         stats.print_stats()
         statsfile.close()
         sys.exit(0)
-    sys.exit(main())
+    main()

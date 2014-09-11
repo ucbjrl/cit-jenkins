@@ -111,12 +111,11 @@ class MonitorRepos():
         for path in repoPaths:
             try:
                 repo = MonitoredRepo(path)
+                repoMap[path] = repo
                 repo.connect()
                 repo.getLastPushed()
-                repoMap[path] = repo
             except Error as e:
                 print e.msg
-                return None
         self.repoMap = repoMap
         self.period = period
         self.lastcheck = datetime.now() - period
@@ -125,7 +124,7 @@ class MonitorRepos():
         ''' Return an array of repositories with updated content. '''
         reposToFetch = []
         for name, repo in self.repoMap.iteritems():
-            if repo.isChanged():
+            if repo.connected and repo.isChanged():
                 reposToFetch.append(name)
         return reposToFetch
 
