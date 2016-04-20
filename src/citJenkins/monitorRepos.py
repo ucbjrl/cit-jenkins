@@ -19,12 +19,20 @@ class MonitoredRepo():
     provide notification if/when its content is updated.
     '''
 
-    def __init__(self, gitrepo):
+    def __init__(self, path):
+        (gitrepo,sep, branch) = path.rpartition(':')
+        if sep == "":
+            gitrepo = branch
+            branch = ""
         repo = Repo(os.path.join(gitrepo, ".git"))
         self.localhead = repo.head.commit
-        self.branch = repo.head.ref.name
+        # If a specific branch name is supplied, use it.
+        if branch == "":
+            # Otherwise, use the current head.
+            self.branch = repo.head.ref.name
         # Save the remote tracking branch so we can filter the appropriate PushEvents
-        trackingbranch = repo.head.ref.tracking_branch()
+        self.branch = branch
+        trackingbranch = repo.heads[branch].tracking_branch()
         if trackingbranch:
             self.trackingbranch = trackingbranch.remote_head
         else:
@@ -84,7 +92,7 @@ class MonitoredRepo():
         # Pick up he most recent PushEvent (fortunately, events are ordered
         # in increasing age, i.e., newest first)
         pushevent = None
-        for e in self.remoterepo.iter_events():
+        for e in self.gh.all_events():
             if e.type == 'PushEvent':
                 # Does this refer to our tracking branch?
                 if e.payload['ref'] == refMatch:
