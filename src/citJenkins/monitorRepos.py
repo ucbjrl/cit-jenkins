@@ -29,7 +29,7 @@ class MonitoredRepo():
         # If a specific branch name is supplied, use it.
         if branch == "":
             # Otherwise, use the current head.
-            self.branch = repo.head.ref.name
+            branch = repo.head.ref.name
         # Save the remote tracking branch so we can filter the appropriate PushEvents
         self.branch = branch
         trackingbranch = repo.heads[branch].tracking_branch()

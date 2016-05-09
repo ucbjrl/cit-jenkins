@@ -51,9 +51,9 @@ class CLIError(Exception):
         return self.msg
 
 localRepoNames = [ '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel',
-                   '/Users/jrl/noArc/clients/ucb/git/ucb-bar/dreamer-tools']
+                   '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel-torture']
 
-defaultChiselJar = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.10/2.3-SNAPSHOT/jars/chisel_2.10.jar'
+defaultChiselJar = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.11/2.3-SNAPSHOT/jars/chisel_2.11.jar'
 chiselJar = defaultChiselJar
 testDir = "test"
 doExit = False
@@ -128,10 +128,9 @@ setupCommands = [
 sbtTestCommands = [
     "chisel-torture --seed $(seed)",
     "mv Torture.vcd Torture-gold.vcd",
-    "sbt -Dsbt.log.noformat=true \"run --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend flo\"",
-    "vcd2step Torture-gold.vcd Torture.flo test.in",
-    "sbt -Dsbt.log.noformat=true \"run --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend c --genHarness --compile\"",
-    "cat test.in | ./Torture",
+    "sbt -Dsbt.log.noformat=true \"run --vcd --isVCDinline --backend flo\"",
+    "vcd2Tester Torture-gold.vcd Torture.flo TortureTester.scala",
+    "sbt -Dsbt.log.noformat=true \"run --vcd --isVCDinline --backend c --genHarness --compile --test\"",
     "vcddiff Torture-gold.vcd Torture.vcd"
 ]
 
@@ -139,11 +138,14 @@ testCommands = [
     "chisel-torture --seed $(seed)",
     "mv Torture.vcd Torture-gold.vcd",
     "scalac -classpath $(chisel_jar):. Torture.scala",
-    "scala -classpath $(chisel_jar):. Torture  --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend flo",
-    "vcd2step Torture-gold.vcd Torture.flo test.in",
-    "scala -classpath $(chisel_jar):. Torture  --compileInitializationUnoptimized --lineLimitFunctions 8 --vcd --isVCDinline --backend c --genHarness --compile",
-    "cat test.in | ./Torture",
-    "vcddiff Torture-gold.vcd Torture.vcd"
+    "scala -classpath $(chisel_jar):. Torture  --vcd --isVCDinline --backend flo",
+    "vcd2Tester Torture-gold.vcd Torture.flo TortureTester.scala",
+    "scalac -classpath $(chisel_jar):. TortureTester.scala",
+    "scala -classpath $(chisel_jar):. TortureTester  --vcd --isVCDinline --backend c --genHarness --compile --test",
+    """sed -e '2i\\
+$scope module TortureTester $end' Torture-gold.vcd > Torture-gold_upd.vcd""",
+    "sed -e '1,100s/\$scope module device_under_test \$end/\$scope module Torture \$end/' TortureTester.vcd > TortureTester_upd.vcd",
+    "vcddiff --offset -5 Torture-gold_upd.vcd TortureTester_upd.vcd"
 ]
 
 def sigterm(signum, frame):
@@ -212,9 +214,11 @@ def doWork(paths, period, verbose):
         print 'no variables'
         exit(1)
     
-    repos = MonitorRepos(paths, period)
-    if repos is None:
-        exit(1)
+    repos = None
+    if len(paths) > 0:
+        repos = MonitorRepos(paths, period)
+        if repos is None:
+            exit(1)
     
     test = testRun(verbose)
     locate(test, variables)
@@ -222,8 +226,6 @@ def doWork(paths, period, verbose):
     result = 0
     keepTestDirectory = False
     while (result == 0 or continueOnError) and not doExit:
-        if repos.reposChangedSince():
-            break
         newVariables = updateVariables()
         if newVariables is None:
             break
@@ -237,6 +239,8 @@ def doWork(paths, period, verbose):
                 print >>sys.stderr, '%s: %s "%s"' % (modName, k, v)
             if badSeedFile is not None:
                 badSeedFile.write(variables['seed'] + '\n')
+        if repos and repos.reposChangedSince():
+            break
     
     if badSeedFile is not None:
         badSeedFile.close()
@@ -284,7 +288,7 @@ USAGE
         parser.add_argument('-J', '--chiselJar', dest='chiselJar', help='path to chisel jar to use for testing [default: %(default)s]', type=str, default=defaultChiselJar)
         parser.add_argument('-s', '--seed', dest='seed', help='seed (or file containing seeds', type=str, default=None)
         parser.add_argument('-b', '--badseed', dest='badseed', help='file to contain list of bad seeds', type=FileType('w'), default=None)
-        parser.add_argument(dest="paths", help="paths to folders containing clones of github repositories to be tested [default: %(default)s]",  default=localRepoNames, metavar="path", nargs='*')
+        parser.add_argument(dest="paths", help="paths to folders containing clones of github repositories to be tested [default: %(default)s]",  default=None, metavar="path", nargs='*')
 
         # Process arguments
         args = parser.parse_args()
