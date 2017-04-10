@@ -14,7 +14,7 @@ from ugError import Error
 def fail(s):
     raise Error(s)
 
-class MonitoredRepo():
+class BaseRepo():
     ''' Connect to a specified git repository and
     provide notification if/when its content is updated.
     '''
@@ -24,26 +24,39 @@ class MonitoredRepo():
         if sep == "":
             gitrepo = branch
             branch = ""
-        repo = Repo(os.path.join(gitrepo, ".git"))
-        self.localhead = repo.head.commit
-        # If a specific branch name is supplied, use it.
-        if branch == "":
-            # Otherwise, use the current head.
-            branch = repo.head.ref.name
-        # Save the remote tracking branch so we can filter the appropriate PushEvents
-        self.branch = branch
-        trackingbranch = repo.heads[branch].tracking_branch()
-        if trackingbranch:
-            self.trackingbranch = trackingbranch.remote_head
+        remotePrefixes = ['git', 'https']
+        remoteUrl = ''
+        # Is this a remote path?
+        isRemote = False
+        for prefix in remotePrefixes:
+            if path.startswith(prefix):
+                isRemote = True
+                break
+        if (isRemote):
+            remoteUrl = path
+            self.repo = None
         else:
-            fail('no tracking branch for %s:%s' % (gitrepo, self.branch))
+            repo = Repo(os.path.join(gitrepo, ".git"))
+            self.localhead = repo.head.commit
+            # If a specific branch name is supplied, use it.
+            if branch == "":
+                # Otherwise, use the current head.
+                branch = repo.head.ref.name
+            # Save the remote tracking branch so we can filter the appropriate PushEvents
+            self.branch = branch
+            trackingbranch = repo.heads[branch].tracking_branch()
+            if trackingbranch:
+                self.trackingbranch = trackingbranch.remote_head
+            else:
+                fail('no tracking branch for %s:%s' % (gitrepo, self.branch))
+            remoteUrl = repo.remotes.origin.ur
+            self.repo = repo
 
         self.connected = False
         self.gh = None
         self.auth = None
-        self.repo = repo
         # Can we parse the remote URL?
-        self.remoteurl = urlparse(repo.remotes.origin.url)
+        self.remoteurl = urlparse(remoteUrl)
         if self.remoteurl:
             if self.remoteurl.scheme in ['git','https'] and self.remoteurl.netloc == 'github.com':
                 # There should be three components (the first is empty)
@@ -118,7 +131,7 @@ class MonitorRepos():
         repoMap = {}
         for path in repoPaths:
             try:
-                repo = MonitoredRepo(path)
+                repo = BaseRepo(path)
                 repoMap[path] = repo
                 repo.connect()
                 repo.getLastPushed()
@@ -156,7 +169,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for path in args.paths:
         try:
-            repo = MonitoredRepo(path)
+            repo = BaseRepo(path)
             repo.connect()
             repo.getLastPushed()
             print "Pushed " + repo.pushedhead + " at " + repo.pusheddatetime.ctime() + ('(new)' if repo.isChanged() else '(old)')

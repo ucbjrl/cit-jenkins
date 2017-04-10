@@ -36,7 +36,7 @@ __version__ = 0.1
 __date__ = '2014-07-03'
 __updated__ = '2014-07-03'
 
-DEBUG = 1
+DEBUG = 0
 TESTRUN = 0
 PROFILE = 0
 
@@ -53,8 +53,8 @@ class CLIError(Exception):
 localRepoNames = [ '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel',
                    '/Users/jrl/noArc/clients/ucb/git/ucb-bar/chisel-torture']
 
-defaultChiselJar = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel_2.11/2.3-SNAPSHOT/jars/chisel_2.11.jar'
-chiselJar = defaultChiselJar
+defaultClassPath = '/Users/jrl/.ivy2/local/edu.berkeley.cs/chisel3_2.11/3.0/jars/chisel3_2.11.jar:/Users/jrl/.ivy2/local/edu.berkeley.cs/firrtl_2.11/0.1-SNAPSHOT/jars/firrtl_2.11.jar:/Users/jrl/.ivy2/cache/org.scalatest/scalatest_2.11/bundles/scalatest_2.11-2.2.6.jar'
+classPath = defaultClassPath
 testDir = "test"
 doExit = False
 seed = None
@@ -106,14 +106,14 @@ def seed_generator(size=8, chars=string.ascii_uppercase + string.digits):
             
     return newSeed
 
-def chisel_jar_path():
-    return chiselJar
+def init_classpath():
+    return classPath
 
 def testDir_path():
     return testDir
 
 initVariableFUNC = {
-    'chisel_jar' : chisel_jar_path,
+    'classpath' : init_classpath,
     'testDir' : testDir_path,
 }
 
@@ -123,29 +123,42 @@ testVariableFUNC = {
 
 setupCommands = [
     "touch DELETETHISDIRECTORYWHENDONE",
+    """cat <<EOF > build.sbt
+organization := "edu.berkeley.cs"
+
+version := "1.0"
+
+name := "torture"
+
+scalaVersion := "2.11.7"
+
+scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:reflectiveCalls")
+
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.6"
+
+libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.5"
+
+libraryDependencies ++= (Seq("chiselfrontend", "chisel3","firrtl").map {
+ dep: String => sys.props.get(dep + "Version") map { "edu.berkeley.cs" %% dep % _ }}).flatten
+
+EOF
+""",
+
 ]
 
 sbtTestCommands = [
     "chisel-torture --seed $(seed)",
-    "mv Torture.vcd Torture-gold.vcd",
-    "sbt -Dsbt.log.noformat=true \"run --vcd --isVCDinline --backend flo\"",
-    "vcd2Tester Torture-gold.vcd Torture.flo TortureTester.scala",
-    "sbt -Dsbt.log.noformat=true \"run --vcd --isVCDinline --backend c --genHarness --compile --test\"",
-    "vcddiff Torture-gold.vcd Torture.vcd"
+    "vcd2FTTester Torture.vcd TortureTester.scala",
+    "sbt -Dsbt.log.noformat=true -DchiselfrontendVersion=3.0 -Dchisel3Version=3.0 -DfirrtlVersion=0.1-SNAPSHOT run",
 ]
 
 testCommands = [
-    "chisel-torture --seed $(seed)",
-    "mv Torture.vcd Torture-gold.vcd",
-    "scalac -classpath $(chisel_jar):. Torture.scala",
-    "scala -classpath $(chisel_jar):. Torture  --vcd --isVCDinline --backend flo",
-    "vcd2Tester Torture-gold.vcd Torture.flo TortureTester.scala",
-    "scalac -classpath $(chisel_jar):. TortureTester.scala",
-    "scala -classpath $(chisel_jar):. TortureTester  --vcd --isVCDinline --backend c --genHarness --compile --test",
-    """sed -e '2i\\
-$scope module TortureTester $end' Torture-gold.vcd > Torture-gold_upd.vcd""",
-    "sed -e '1,100s/\$scope module device_under_test \$end/\$scope module Torture \$end/' TortureTester.vcd > TortureTester_upd.vcd",
-    "vcddiff --offset -5 Torture-gold_upd.vcd TortureTester_upd.vcd"
+    "firrtl-torture --seed $(seed)",
+    "scalac -classpath $(classpath):. Torture.scala",
+    "scala -classpath $(classpath):. torture.Torture",
+    "vcd2FTTester --firrtl Torture.firrtl Torture.vcd TortureTester.scala",
+    "scalac -classpath $(classpath):. TortureTester.scala",
+    "scala -classpath $(classpath):. torture.TortureTester",
 ]
 
 def sigterm(signum, frame):
@@ -276,7 +289,7 @@ def main(argv=None): # IGNORE:C0111
 USAGE
 ''' % (program_shortdesc, str(__date__))
 
-    global chiselJar, defaultChiselJar
+    global classPath, defaultClassPath
     global continueOnError
     try:
         # Setup argument parser
@@ -285,7 +298,7 @@ USAGE
         parser.add_argument("-p", "--period", dest="periodMinutes", help="interval to check for repo updates (in minutes) [default: %(default)s]", type=int, default=15)
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument('-J', '--chiselJar', dest='chiselJar', help='path to chisel jar to use for testing [default: %(default)s]', type=str, default=defaultChiselJar)
+        parser.add_argument('-C', '--classpath', dest='classPath', help='additional classpath for jars to use for testing [default: %(default)s]', type=str, default=defaultClassPath)
         parser.add_argument('-s', '--seed', dest='seed', help='seed (or file containing seeds', type=str, default=None)
         parser.add_argument('-b', '--badseed', dest='badseed', help='file to contain list of bad seeds', type=FileType('w'), default=None)
         parser.add_argument(dest="paths", help="paths to folders containing clones of github repositories to be tested [default: %(default)s]",  default=None, metavar="path", nargs='*')

@@ -72,7 +72,8 @@ class testRun():
 
             if self.verbose > 0:
                 print >>sys.stderr, '%s: "%s" ...' % (modName, expandedCommand)
-            retcode = subprocess.call(expandedCommand, shell=True)
+            FNULL = open(os.devnull, 'r')
+            retcode = subprocess.call(expandedCommand, stdin=FNULL, shell=True, close_fds=True)
             if self.verbose > 0:
                 print >>sys.stderr, '%s: ... returned %d' % (modName, retcode)
             if not testResult(expandedCommand, retcode):
