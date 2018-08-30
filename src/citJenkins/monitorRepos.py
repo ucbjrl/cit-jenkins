@@ -49,13 +49,15 @@ class BaseRepo():
                 self.trackingbranch = trackingbranch.remote_head
             else:
                 fail('no tracking branch for %s:%s' % (gitrepo, self.branch))
-            remoteUrl = repo.remotes.origin.ur
+            remoteUrl = repo.remotes.origin.url
             self.repo = repo
 
         self.connected = False
         self.gh = None
         self.auth = None
         # Can we parse the remote URL?
+        if remoteUrl.startswith('git@'):
+            remoteUrl = remoteUrl.replace(':', '/', 1).replace('@', '://', 1)
         self.remoteurl = urlparse(remoteUrl)
         if self.remoteurl:
             if self.remoteurl.scheme in ['git','https'] and self.remoteurl.netloc == 'github.com':
