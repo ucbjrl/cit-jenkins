@@ -1,4 +1,4 @@
-cit-jenkins is a Python Module to manage continuous integration builds with Jenkins.
+citSupport is a Python Module providing support for manage continuous integration builds.
 
 It contains two main sub-modules:
   monitoredRepo - monitor a GitHub repo for push events,
