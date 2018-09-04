@@ -1,9 +1,9 @@
 #!/usr/local/bin/python2.7
 # encoding: utf-8
 '''
-citJenkins.citjenkins -- shortdesc
+citSupport.citSupport -- shortdesc
 
-citJenkins.citjenkins is a description
+citSupport.citSupport is a description
 
 It defines classes_and_methods
 
@@ -163,7 +163,7 @@ testCommands = [
 
 def sigterm(signum, frame):
     global doExit
-    print 'citjenkins: signal %d' % (signum)
+    print 'citSupport: signal %d' % (signum)
     if signum == signal.SIGTERM:
         doExit = True
 
@@ -344,7 +344,7 @@ if __name__ == "__main__":
     if PROFILE:
         import cProfile
         import pstats
-        profile_filename = 'citJenkins.citjenkins_profile.txt'
+        profile_filename = 'citSupport.citSupport_profile.txt'
         cProfile.run('main()', profile_filename)
         statsfile = open("profile_stats.txt", "wb")
         p = pstats.Stats(profile_filename, stream=statsfile)
