@@ -9,8 +9,8 @@ itself to GitHub, and in order to do so, it uses a personal API token, which it 
 environment variable GHRPAT.
 
 see:
-https://developer.github.com/guides/basics-of-authentication
-https://developer.github.com/v3/auth/#basic-authentication
-https://developer.github.com/v3/oauth_authorizations/
-https://developer.github.com/v3/oauth/
-https://github.com/blog/1509-personal-api-tokens
+- https://developer.github.com/guides/basics-of-authentication
+- https://developer.github.com/v3/auth/#basic-authentication
+- https://developer.github.com/v3/oauth_authorizations/
+- https://developer.github.com/v3/oauth/
+- https://github.com/blog/1509-personal-api-tokens
