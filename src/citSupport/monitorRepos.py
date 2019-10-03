@@ -36,7 +36,7 @@ class BaseRepo():
             remoteUrl = path
             self.repo = None
         else:
-            repo = Repo(os.path.join(gitrepo, ".git"))
+            repo = Repo(gitrepo)
             self.localhead = repo.head.commit
             # If a specific branch name is supplied, use it.
             if branch == "":
